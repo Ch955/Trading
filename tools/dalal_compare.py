@@ -18,13 +18,32 @@ EXIT_BAR = "15:05"  # its close at 15:10 is the exit, matching our bot's flat ti
 SESSION_BARS = 75   # 09:15 .. 15:25
 
 
+SLOTS = ["%02d:%02d" % divmod(9 * 60 + 15 + 5 * i, 60) for i in range(SESSION_BARS)]
+MAX_MISSING = 5
+
+
 def full_sessions(days):
-    """Only complete sessions, as lists indexed by bar slot (what history_replay expects)."""
+    """Sessions as lists indexed by bar slot (what history_replay expects). Yahoo often drops
+    a bar or two; a missing slot becomes a flat bar at the previous close so later bars keep
+    their slot. Days missing the 09:15 bar or more than MAX_MISSING bars up to the exit are
+    skipped."""
+    exit_idx = SLOTS.index(EXIT_BAR)
     out = []
     for d in sorted(days):
-        bars = days[d]
-        if len(bars) == SESSION_BARS and bars[0]["t"] == "09:15":
-            out.append((d, bars))
+        by_t = {b["t"]: b for b in days[d]}
+        if "09:15" not in by_t:
+            continue
+        if sum(1 for t in SLOTS[:exit_idx + 1] if t not in by_t) > MAX_MISSING:
+            continue
+        bars, prev = [], None
+        for t in SLOTS:
+            b = by_t.get(t)
+            if b is None:
+                c = prev["c"]
+                b = {"t": t, "o": c, "h": c, "l": c, "c": c, "v": 0, "filled": True}
+            bars.append(b)
+            prev = b
+        out.append((d, bars))
     return out
 
 
@@ -114,6 +133,9 @@ def main():
     raw, failed = data.fetch_all(syms, "60d")
     sessions = {s: full_sessions(days) for s, days in raw.items()}
     dates = sorted({d for v in sessions.values() for d, _ in v})
+    if not dates:
+        sys.exit("no usable sessions in the downloaded data; nothing written")
+    filled = sum(1 for v in sessions.values() for _, D in v for b in D if b.get("filled"))
     results = {r: run(sessions, r) for r in (2.0, 1.0)}
     st = {r: stats(results[r]) for r in results}
     our, our_months = ours()
@@ -129,6 +151,9 @@ def main():
           "skipped. Same money rules for all: Rs 2,400 capital, 5x MIS, max 1 trade a day (earliest breakout), "
           "Rs 25 max loss per trade incl. charges, monthly stop at a Rs 500 loss."
           % (len(dates), dates[0] if dates else "-", dates[-1] if dates else "-", len(failed)), "",
+          "Data gaps: Yahoo was missing %d five-minute bars across all stocks and days; each was filled "
+          "with a flat bar at the previous close for the dalal rule (days missing more than %d bars "
+          "before 15:10 were dropped)." % (filled, MAX_MISSING), "",
           "The dalal-street-skills rule is its own code (bot/dalal_port.py, copied from commit 6fcc8d4, MIT): "
           "15-minute opening range, stop at the range midpoint, exit at 15:10. Differences from our bot: it "
           "enters at the **signal bar's close** (ours waits for the next bar's open plus 0.05% slippage, so its "

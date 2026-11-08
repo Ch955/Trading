@@ -150,6 +150,19 @@ class DalalPort(unittest.TestCase):
         self.assertEqual((t["entry"], t["stop"], t["outcome"]), (101.4, 100.25, "target"))
         self.assertEqual(t["exit"], t["target"])
 
+    def test_gap_fill_keeps_slots(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
+        import dalal_compare as dc
+        bars = make_day(OR + [(100.6, 101.5, 100.6, 101.4)])
+        gappy = [b for b in bars if b["t"] not in ("09:40", "12:00")]
+        (d, D), = dc.full_sessions({"2026-11-06": gappy})
+        self.assertEqual(len(D), 75)
+        self.assertEqual(D[5]["t"], "09:40")
+        self.assertTrue(D[5]["filled"])
+        self.assertEqual(D[5]["c"], D[4]["c"])
+        too_gappy = [b for b in bars if b["t"] < "10:00" or b["t"] > "11:00"]
+        self.assertEqual(dc.full_sessions({"2026-11-06": too_gappy}), [])
+
     def test_charges_close_to_ours(self):
         from bot import dalal_port as dp
         theirs = dp.trade_charges(12000, 12000)["total"]
