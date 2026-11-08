@@ -139,6 +139,23 @@ class Engine(unittest.TestCase):
         self.assertEqual(t["symbol"], "AAA")
 
 
+class DalalPort(unittest.TestCase):
+    def test_entry_is_signal_close_and_target(self):
+        from bot import dalal_port as dp
+        bars = make_day(OR + [(100.6, 101.5, 100.6, 101.4), (101.4, 101.6, 101.3, 101.5),
+                              (101.5, 104.0, 101.4, 103.9)])
+        rule = {"setup": "orb", "or_minutes": 15, "stop_rule": "or_mid", "target_r": 2.0}
+        last = [b["t"] for b in bars].index("15:05")
+        t = dp.history_replay([("2026-11-06", bars)], rule, last)["trades"][0]
+        self.assertEqual((t["entry"], t["stop"], t["outcome"]), (101.4, 100.25, "target"))
+        self.assertEqual(t["exit"], t["target"])
+
+    def test_charges_close_to_ours(self):
+        from bot import dalal_port as dp
+        theirs = dp.trade_charges(12000, 12000)["total"]
+        self.assertAlmostEqual(theirs, charges.round_trip(100, 120, 120, CFG["charges"]), delta=0.05)
+
+
 class Data(unittest.TestCase):
     def test_parse_chart_ist(self):
         # 2026-11-06 03:45 UTC = 09:15 IST
