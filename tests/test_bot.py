@@ -124,6 +124,20 @@ class Engine(unittest.TestCase):
         self.assertLessEqual(t["max_loss"], CFG["risk_per_trade"])
         self.assertAlmostEqual(t["net"], t["gross"] - t["charges"], places=2)
 
+    def test_index_filter_uses_that_days_bars(self):
+        day = "2026-11-06"
+        win = make_day(OR + [(100.6, 101.5, 100.6, 101.4), (101.4, 101.6, 101.3, 101.5),
+                             (101.5, 104.0, 101.4, 103.9)])
+        index_up = make_day(OR + [(100.6, 101.5, 100.6, 101.4)])     # above its OR mid at 09:30
+        index_down = make_day(OR + [(100.6, 100.6, 99.0, 99.2)])     # below its OR mid at 09:30
+        stocks = {"AAA": {day: win}}
+        t, _ = engine.pick_trade(day, stocks, {day: index_up, "2026-11-05": index_down}, CFG)
+        self.assertEqual(t["symbol"], "AAA")
+        t, _ = engine.pick_trade(day, stocks, {day: index_down, "2026-11-05": index_up}, CFG)
+        self.assertIsNone(t)
+        t, _ = engine.pick_trade(day, stocks, {}, CFG)  # no index data -> filter doesn't block
+        self.assertEqual(t["symbol"], "AAA")
+
 
 class Data(unittest.TestCase):
     def test_parse_chart_ist(self):

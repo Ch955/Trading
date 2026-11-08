@@ -20,6 +20,7 @@ def size(entry, stop, cfg):
 def pick_trade(day, bars_by_symbol, index_bars, cfg):
     """Return (trade or None, list of notes). Deterministic for a given input."""
     s = cfg["strategy"]
+    day_index = (index_bars or {}).get(day, [])
     cands = []
     for sym, days in bars_by_symbol.items():
         bars = days.get(day)
@@ -28,7 +29,7 @@ def pick_trade(day, bars_by_symbol, index_bars, cfg):
         sig = strategy.find_signal(bars, s, cfg["min_price"])
         if not sig:
             continue
-        if cfg.get("use_index_filter") and not strategy.index_ok(index_bars, sig["signal_time"],
+        if cfg.get("use_index_filter") and not strategy.index_ok(day_index, sig["signal_time"],
                                                                s["opening_range_bars"]):
             continue
         cands.append((sig["signal_time"], -sig["rvol"], sym, sig, bars))
