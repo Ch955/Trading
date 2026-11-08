@@ -8,6 +8,7 @@ import datetime as dt
 import io
 import json
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -24,16 +25,23 @@ LT M&M MARUTI NESTLEIND NTPC ONGC POWERGRID RELIANCE SBILIFE SBIN SHRIRAMFIN SUN
 TATACONSUM TATASTEEL TCS TECHM TITAN TRENT ULTRACEMCO WIPRO""".split()
 
 
-def _get(url, tries=3):
+def _get(url, tries=4):
+    """GET with retries. Yahoo answers HTTP 429 when rate-limited: back off much longer
+    then, and alternate between its query1 and query2 hosts."""
     for i in range(tries):
+        u = url.replace("://query1.", "://query2.") if (i % 2 and "://query1." in url) else url
         try:
-            req = urllib.request.Request(url, headers=UA)
+            req = urllib.request.Request(u, headers=UA)
             with urllib.request.urlopen(req, timeout=20) as r:
                 return r.read()
+        except urllib.error.HTTPError as e:
+            if i == tries - 1 or e.code == 404:
+                raise
+            time.sleep(15 * (i + 1) if e.code == 429 else 2 * (i + 1))
         except Exception:
             if i == tries - 1:
                 raise
-            time.sleep(1.5 * (i + 1))
+            time.sleep(2 * (i + 1))
 
 
 def universe():
@@ -74,7 +82,13 @@ def fetch_bars(yahoo_symbol, range_="5d", interval="5m"):
     return parse_chart(json.loads(_get(url)))
 
 
-def fetch_all(symbols, range_="5d", pause=0.25, log=print):
+class DataError(Exception):
+    pass
+
+
+def fetch_all(symbols, range_="5d", pause=0.6, log=print):
+    """Download every symbol; raise DataError if more than a quarter of them fail, so a
+    rate-limited run stops loudly instead of producing an empty or skewed report."""
     out, failed = {}, []
     for s in symbols:
         try:
@@ -83,4 +97,7 @@ def fetch_all(symbols, range_="5d", pause=0.25, log=print):
             failed.append(s)
             log("  skip %s: %s" % (s, str(e)[:80]))
         time.sleep(pause)
+    if len(failed) > len(symbols) // 4:
+        raise DataError("%d of %d symbols failed to download (e.g. Yahoo rate limit, HTTP 429); "
+                        "nothing written. Try again later." % (len(failed), len(symbols)))
     return out, failed
