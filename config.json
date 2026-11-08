@@ -1,0 +1,38 @@
+{
+  "mode": "paper",
+  "capital": 2400,
+  "mis_leverage": 5,
+
+  "risk_per_trade": 25,
+  "max_trades_per_day": 1,
+  "daily_loss_limit": 100,
+  "monthly_loss_limit": 500,
+
+  "universe": "nifty100",
+  "min_price": 50,
+  "use_index_filter": true,
+
+  "strategy": {
+    "name": "orb_long",
+    "opening_range_bars": 3,
+    "bar_minutes": 5,
+    "min_range_pct": 0.3,
+    "max_range_pct": 2.0,
+    "last_entry_time": "10:55",
+    "target_r": 2.0,
+    "exit_time": "15:10"
+  },
+
+  "slippage_pct": 0.05,
+
+  "charges": {
+    "_note": "Zerodha equity intraday rates. Re-check zerodha.com/charges before going live.",
+    "brokerage_pct": 0.03,
+    "brokerage_cap": 20,
+    "stt_sell_pct": 0.025,
+    "exchange_txn_pct": 0.00297,
+    "sebi_per_crore": 10,
+    "stamp_buy_pct": 0.003,
+    "gst_pct": 18
+  }
+}
