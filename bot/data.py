@@ -75,6 +75,26 @@ def parse_chart(payload):
     return days
 
 
+def parse_daily(payload):
+    """Daily candles as a date-sorted list of {"d": "YYYY-MM-DD", "o", "h", "l", "c", "v"}."""
+    res = payload["chart"]["result"][0]
+    q = res["indicators"]["quote"][0]
+    out = {}
+    for i, t in enumerate(res.get("timestamp") or []):
+        o, h, l, c, v = (q[k][i] for k in ("open", "high", "low", "close", "volume"))
+        if None in (o, h, l, c) or min(o, h, l, c) <= 0:
+            continue
+        d = dt.datetime.fromtimestamp(t, IST).strftime("%Y-%m-%d")
+        out[d] = {"d": d, "o": o, "h": h, "l": l, "c": c, "v": v or 0}
+    return [out[d] for d in sorted(out)]
+
+
+def fetch_daily(yahoo_symbol, range_="5y"):
+    sym = urllib.parse.quote(yahoo_symbol)
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=1d&range=%s" % (sym, range_)
+    return parse_daily(json.loads(_get(url)))
+
+
 def fetch_bars(yahoo_symbol, range_="5d", interval="5m"):
     sym = urllib.parse.quote(yahoo_symbol)
     url = ("https://query1.finance.yahoo.com/v8/finance/chart/%s?interval=%s&range=%s"
@@ -86,13 +106,15 @@ class DataError(Exception):
     pass
 
 
-def fetch_all(symbols, range_="5d", pause=0.6, log=print):
-    """Download every symbol; raise DataError if more than a quarter of them fail, so a
-    rate-limited run stops loudly instead of producing an empty or skewed report."""
+def fetch_all(symbols, range_="5d", pause=0.6, log=print, fetch=None):
+    """Download every symbol (5-minute bars by default, or pass fetch=fetch_daily); raise
+    DataError if more than a quarter of them fail, so a rate-limited run stops loudly
+    instead of producing an empty or skewed report."""
+    fetch = fetch or fetch_bars
     out, failed = {}, []
     for s in symbols:
         try:
-            out[s] = fetch_bars(s + ".NS", range_)
+            out[s] = fetch(s + ".NS", range_)
         except Exception as e:
             failed.append(s)
             log("  skip %s: %s" % (s, str(e)[:80]))
